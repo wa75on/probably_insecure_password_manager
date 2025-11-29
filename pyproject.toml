@@ -1,0 +1,21 @@
+[build-system]
+requires =["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "probably_insecure_password_manager"
+description = ""
+requires-python = ">=3.13.7"
+version = "0.1.0"
+authors = [
+    {name = "Daniel Zapryanov", email = "dazapr@taltech.ee"}
+]
+license = { file = "LICENSE" }
+readme = { file = "README.md", content-type = "text/markdown" }
+dependencies = [
+    "argon2-cffi==25.1.0",
+    "argon2-cffi-bindings==25.1.0",
+    "cffi==2.0.0",
+    "pycparser==2.23",
+    "pycryptodome==3.23.0"
+]
