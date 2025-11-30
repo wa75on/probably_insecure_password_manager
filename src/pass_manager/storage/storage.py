@@ -33,4 +33,8 @@ def write_vault(username: str, data: bytes):
         os.mkdir(f"{VAULT_PATH}")
     with open(path, "wb") as file:
         file.write(data)
-    
+
+def delete_vault(username: str):
+    path = f"{VAULT_PATH}{username}{FILE_EXT}"
+    if not (dir_exists() and vault_exists(username)): return
+    os.remove(path)

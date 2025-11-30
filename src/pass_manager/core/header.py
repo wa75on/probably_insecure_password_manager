@@ -5,7 +5,7 @@ class HeaderError(Exception):
         self.message = message
 
 HEADER_VERSION = 1
-MAGIC_NUMBER = ("SECVLT").encode().hex()
+MAGIC_NUMBER = ("SECVLT")
 ENCODING = "utf-8"
 HEADER = namedtuple('HEADER', 
                     [
@@ -30,10 +30,12 @@ HEADER_SIZE = HEADER(
     body_nonce=1
 )
 KDF = {
-    0:"Argon2id"
+    0:"Argon2id",
+    1:"HKDF"
     }
 ENC = {
-    0:"AES-256-GCM"
+    0:"AES-256-GCM",
+    1:"AES-256-CTR"
 }
 
 def parse_fixed(pointer: int, data: bytes, size: int) -> tuple[bytes, int]:
@@ -49,7 +51,7 @@ def parse_var(pointer: int, data: bytes) -> tuple[bytes, int]:
     return res, pointer
 
 class Header:
-    def __init__(self, magic_number: str, version: int, owner:str, kek_kdf_id: int, kek_kdf_params: str,
+    def __init__(self, magic_number: str, version: int, owner:str, kek_kdf_id: int, kek_kdf_params: bytes,
                  mk_wrap_id: int, ek_kdf_id: int, ek_enc_id: int, body_enc_id: int, header_tag: bytes,
                  wmk_nonce: bytes, wrapped_mk: bytes, body_tag: bytes, body_nonce: bytes):
         self.header_fields = HEADER(
@@ -75,22 +77,31 @@ class Header:
         fields = {}
         array_pointer: int = 0
         fields["magic_number"], array_pointer = parse_fixed(array_pointer, data, HEADER_SIZE.magic_number)
+        fields["magic_number"] = fields["magic_number"].decode()
         fields["version"], array_pointer = parse_fixed(array_pointer, data, HEADER_SIZE.version)
+        fields["version"] = int.from_bytes(fields["version"])
         fields["owner"], array_pointer = parse_var(array_pointer, data)
+        fields["owner"] = fields["owner"].decode()
         fields["kek_kdf_id"], array_pointer = parse_fixed(array_pointer, data, HEADER_SIZE.kek_kdf_id)
+        fields["kek_kdf_id"] = int.from_bytes(fields["kek_kdf_id"])
         fields["kek_kdf_params"], array_pointer = parse_var(array_pointer, data)
         fields["mk_wrap_id"], array_pointer = parse_fixed(array_pointer, data, HEADER_SIZE.mk_wrap_id)
+        fields["mk_wrap_id"] = int.from_bytes(fields["mk_wrap_id"])
         fields["body_enc_id"], array_pointer = parse_fixed(array_pointer, data, HEADER_SIZE.body_enc_id)
+        fields["body_enc_id"] = int.from_bytes(fields["body_enc_id"])
         fields["ek_kdf_id"], array_pointer = parse_fixed(array_pointer, data, HEADER_SIZE.ek_kdf_id)
-        fields["ek_end_id"], array_pointer = parse_fixed(array_pointer, data, HEADER_SIZE.ek_enc_id)
+        fields["ek_kdf_id"] = int.from_bytes(fields["ek_kdf_id"])
+        fields["ek_enc_id"], array_pointer = parse_fixed(array_pointer, data, HEADER_SIZE.ek_enc_id)
+        fields["ek_enc_id"] = int.from_bytes(fields["ek_enc_id"])
         fields["header_tag"], array_pointer = parse_var(array_pointer, data)
         fields["wmk_nonce"], array_pointer = parse_var(array_pointer, data)
+        fields["wrapped_mk"], array_pointer = parse_var(array_pointer, data)
         fields["body_tag"], array_pointer = parse_var(array_pointer, data)
         fields["body_nonce"], array_pointer = parse_var(array_pointer, data)
         return cls(**fields), array_pointer
     
     @classmethod
-    def create_initial(cls, username:str, kek_kdf_params: str,
+    def create_initial(cls, username:str, kek_kdf_params: bytes,
                        header_tag: bytes = bytes(), wmk_nonce: bytes = bytes(),
                        wrapped_mk: bytes = bytes(), body_tag: bytes = bytes(),
                        body_nonce: bytes = bytes()) -> "Header":
@@ -119,8 +130,8 @@ class Header:
         data.extend(len(self.header_fields.owner).to_bytes(length=HEADER_SIZE.owner))
         data.extend(self.header_fields.owner.encode(ENCODING))
         data.extend(self.header_fields.kek_kdf_id.to_bytes(length=HEADER_SIZE.kek_kdf_id))
-        data.extend(len(self.header_fields.kek_kdf_params.encode(ENCODING)).to_bytes(length=HEADER_SIZE.kek_kdf_params))
-        data.extend(self.header_fields.kek_kdf_params.encode(ENCODING))
+        data.extend(len(self.header_fields.kek_kdf_params).to_bytes(length=HEADER_SIZE.kek_kdf_params))
+        data.extend(self.header_fields.kek_kdf_params)
         data.extend(self.header_fields.mk_wrap_id.to_bytes(length=HEADER_SIZE.mk_wrap_id))
         data.extend(self.header_fields.body_enc_id.to_bytes(length=HEADER_SIZE.body_enc_id))
         data.extend(self.header_fields.ek_kdf_id.to_bytes(length=HEADER_SIZE.ek_kdf_id))
@@ -144,8 +155,8 @@ class Header:
         data.extend(len(self.header_fields.owner).to_bytes(length=HEADER_SIZE.owner))
         data.extend(self.header_fields.owner.encode(ENCODING))
         data.extend(self.header_fields.kek_kdf_id.to_bytes(length=HEADER_SIZE.kek_kdf_id))
-        data.extend(len(self.header_fields.kek_kdf_params.encode(ENCODING)).to_bytes(length=HEADER_SIZE.kek_kdf_params))
-        data.extend(self.header_fields.kek_kdf_params.encode(ENCODING))
+        data.extend(len(self.header_fields.kek_kdf_params).to_bytes(length=HEADER_SIZE.kek_kdf_params))
+        data.extend(self.header_fields.kek_kdf_params)
         data.extend(self.header_fields.mk_wrap_id.to_bytes(length=HEADER_SIZE.mk_wrap_id))
         data.extend(self.header_fields.body_enc_id.to_bytes(length=HEADER_SIZE.body_enc_id))
         data.extend(self.header_fields.ek_kdf_id.to_bytes(length=HEADER_SIZE.ek_kdf_id))
@@ -153,7 +164,7 @@ class Header:
         return bytes(data) 
     
     def update_fields(self, **kwargs):
-        self.header_fields._replace(**kwargs)
+        self.header_fields = self.header_fields._replace(**kwargs)
     
     def verify_header_structure(self, username: str) -> bool:
         if self.header_fields.magic_number != MAGIC_NUMBER: return False
